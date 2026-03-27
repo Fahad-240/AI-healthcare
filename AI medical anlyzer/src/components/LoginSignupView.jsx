@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { MdEmail, MdLock, MdPerson, MdPhone, MdVisibility, MdVisibilityOff, MdMedicalServices } from 'react-icons/md'
 import { VIEWS } from '../constants/views'
+import { BASE_URL } from '../config'
 import illustration from '../assets/auth-illustration.png'
 
 function LoginSignupView({ onLogin, initialMode = VIEWS.LOGIN }) {
@@ -73,7 +74,7 @@ function LoginSignupView({ onLogin, initialMode = VIEWS.LOGIN }) {
     if (Object.keys(newErrors).length === 0) {
       setLoading(true)
       try {
-        const response = await fetch('http://localhost:5000/api/auth/login', {
+        const response = await fetch(`${BASE_URL}/api/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(loginForm),
@@ -106,7 +107,7 @@ function LoginSignupView({ onLogin, initialMode = VIEWS.LOGIN }) {
     if (Object.keys(newErrors).length === 0) {
       setLoading(true)
       try {
-        const response = await fetch('http://localhost:5000/api/auth/register', {
+        const response = await fetch(`${BASE_URL}/api/auth/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(signupForm),
@@ -115,7 +116,7 @@ function LoginSignupView({ onLogin, initialMode = VIEWS.LOGIN }) {
 
         if (result.status === 'success') {
           // After successful signup, log them in automatically
-          const loginRes = await fetch('http://localhost:5000/api/auth/login', {
+          const loginRes = await fetch(`${BASE_URL}/api/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email: signupForm.email, password: signupForm.password }),

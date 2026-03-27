@@ -8,6 +8,7 @@ import {
   MdMedicalServices
 } from 'react-icons/md'
 import { FaNotesMedical, FaPills } from 'react-icons/fa'
+import { BASE_URL } from '../config'
 
 function DashboardView() {
   const [historyData, setHistoryData] = useState([]);
@@ -17,7 +18,7 @@ function DashboardView() {
     const fetchHistory = async () => {
       try {
         const userStr = localStorage.getItem('user');
-        let url = 'http://localhost:5000/api/history';
+        let url = `${BASE_URL}/api/history`;
         if (userStr) {
           const user = JSON.parse(userStr);
           if (user.email) url += `?email=${encodeURIComponent(user.email)}`;

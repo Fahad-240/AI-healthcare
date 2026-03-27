@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { MdCloudUpload, MdDescription, MdHistory, MdAutoGraph, MdWarning, MdCheckCircle } from 'react-icons/md'
+import { BASE_URL } from '../config'
 
 function PrescriptionsView() {
   const [file, setFile] = useState(null)
@@ -38,7 +39,7 @@ function PrescriptionsView() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze-document', {
+      const response = await fetch(`${BASE_URL}/api/analyze-document`, {
         method: 'POST',
         body: formData,
       })

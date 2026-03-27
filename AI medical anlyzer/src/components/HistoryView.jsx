@@ -8,6 +8,7 @@ import {
   MdWarningAmber,
 } from 'react-icons/md'
 import { FaFlask, FaPills, FaNotesMedical } from 'react-icons/fa'
+import { BASE_URL } from '../config'
 
 function HistoryView() {
   const [historyData, setHistoryData] = useState([]);
@@ -17,7 +18,7 @@ function HistoryView() {
     const fetchHistory = async () => {
       try {
         const userStr = localStorage.getItem('user');
-        let url = 'http://localhost:5000/api/history';
+        let url = `${BASE_URL}/api/history`;
         if (userStr) {
           const user = JSON.parse(userStr);
           if (user.email) url += `?email=${encodeURIComponent(user.email)}`;

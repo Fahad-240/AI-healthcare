@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import './App.css'
 import { VIEWS } from './constants/views'
+import { BASE_URL } from './config'
 import Sidebar from './components/Sidebar'
 import HeaderBar from './components/HeaderBar'
 import DashboardView from './components/DashboardView'
@@ -48,7 +49,7 @@ function App() {
     }
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze-document', {
+      const response = await fetch(`${BASE_URL}/api/analyze-document`, {
         method: 'POST',
         body: formData,
       })
