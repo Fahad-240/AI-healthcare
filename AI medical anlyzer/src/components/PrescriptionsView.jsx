@@ -1,10 +1,9 @@
 import { useState } from 'react'
-import { MdCloudUpload, MdDescription, MdHistory, MdAutoGraph, MdWarning, MdCheckCircle } from 'react-icons/md'
+import { MdMedicalServices, MdCheckCircle } from 'react-icons/md'
 import { BASE_URL } from '../config'
 
 function PrescriptionsView() {
   const [file, setFile] = useState(null)
-  const [previewUrl, setPreviewUrl] = useState(null)
   const [status, setStatus] = useState('idle') // idle | processing | ready
   const [analysis, setAnalysis] = useState(null)
 
@@ -16,26 +15,13 @@ function PrescriptionsView() {
     setStatus('processing')
     setAnalysis(null)
 
-    // Generate preview URL
-    if (selectedFile.type.startsWith('image/')) {
-      const url = URL.createObjectURL(selectedFile)
-      setPreviewUrl(url)
-    } else if (selectedFile.type === 'application/pdf') {
-      const url = URL.createObjectURL(selectedFile)
-      setPreviewUrl(url)
-    } else {
-      setPreviewUrl(null)
-    }
-
     const formData = new FormData()
     formData.append('file', selectedFile)
     formData.append('type', 'prescription')
 
-    // Add user email if authenticated
-    const userStr = localStorage.getItem('user')
-    if (userStr) {
-      const user = JSON.parse(userStr)
-      if (user.email) formData.append('email', user.email)
+    const deviceId = localStorage.getItem('deviceId')
+    if (deviceId) {
+      formData.append('deviceId', deviceId)
     }
 
     try {
@@ -62,152 +48,78 @@ function PrescriptionsView() {
 
   return (
     <div>
-      <div className="view-header">
-        <h1>Prescription Analyzer</h1>
-        <p>Extract medicines and dosages from doctor's handwritten or printed prescriptions.</p>
+      <div className="view-header" style={{ textAlign: 'center' }}>
+        <h1>Prescription Decoder</h1>
+        <p>Extract medicines, dosages, and doctor instructions from handwritten prescriptions.</p>
       </div>
 
-      <div className="content-grid" style={{ marginBottom: '20px' }}>
-        {/* Top Row: Left - Upload | Right - Preview */}
-        <section className="panel panel-primary upload-panel">
-          <div className="panel-header">
-            <h2>Upload Prescription</h2>
-            <p>Clear image of handwritten parchment works best.</p>
-          </div>
-
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <label className={`upload-area upload-area-large upload-area-clickable ${status === 'processing' ? 'processing' : ''}`} style={{ flex: 1 }}>
-              <input
-                type="file"
-                onChange={handleFileChange}
-                accept="image/*,.pdf"
-                className="file-input"
-                id="prescriptionUploadInput"
-              />
-              <div className="upload-icon">
-                <MdCloudUpload size={20} />
-              </div>
-              <p className="upload-title">{file ? file.name : 'Select Prescription Photo'}</p>
-              <button type="button" className="btn-primary">{file ? 'Change File' : 'Select File'}</button>
-              {status === 'processing' && (
-                <p className="upload-status">AI is scanning prescription text...</p>
-              )}
-            </label>
-
-            {file && (
-              <div style={{ marginTop: '15px', textAlign: 'center' }}>
-                <button
-                  type="button"
-                  className="btn-outline"
-                  style={{ borderColor: '#ef4444', color: '#ef4444', padding: '6px 16px', fontSize: '13px' }}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setFile(null);
-                    setPreviewUrl(null);
-                    setStatus('idle');
-                    setAnalysisResult(null);
-                    const fileInput = document.getElementById('prescriptionUploadInput');
-                    if (fileInput) fileInput.value = '';
-                  }}
-                  disabled={status === 'processing'}
-                >
-                  Clear Selection
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="panel-footer">
-            <span className="badge badge-soft"><MdAutoGraph /> Dosage Extraction</span>
-            <span className="badge badge-soft"><MdDescription /> Med Name Registry</span>
-          </div>
-        </section>
-
-        <section className="panel file-preview-panel">
-          <div className="panel-header">
-            <h2>Prescription Preview</h2>
-            <p>Visual confirmation of uploaded document.</p>
-          </div>
-
-          <div className="preview-window">
-            {!previewUrl && (
-              <div className="empty-preview">
-                <div className="empty-preview-icon-wrapper">
-                  <MdDescription size={32} />
-                </div>
-                <h3 className="empty-preview-title">No Document Found</h3>
-                <p className="empty-preview-text">Upload a clear photo or PDF of the prescription to view it here.</p>
-              </div>
-            )}
-            {previewUrl && file?.type.startsWith('image/') && (
-              <img src={previewUrl} alt="Prescription Preview" className="preview-img" />
-            )}
-            {previewUrl && file?.type === 'application/pdf' && (
-              <div className="pdf-preview-box">
-                <MdDescription size={48} color="#2563eb" />
-                <p>PDF Loaded: {file.name}</p>
-                <a href={previewUrl} target="_blank" rel="noopener noreferrer" className="btn-text">
-                  Open PDF in New Tab
-                </a>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
-
-      {/* Bottom Row: Results */}
-      <section className="panel analysis-results-panel">
-        <div className="panel-header">
-          <h2>AI Analysis Results</h2>
-          <p>Detected medications and usage instructions.</p>
+      {status === 'idle' && (
+        <div className="focus-upload">
+          <label className="upload-area">
+            <input
+              type="file"
+              onChange={handleFileChange}
+              accept="image/*,.pdf"
+              className="file-input"
+            />
+            <div className="upload-icon">
+              <MdMedicalServices size={48} />
+            </div>
+            <p className="upload-title">
+              {file ? file.name : 'Click to Upload Prescription'}
+            </p>
+            <p className="upload-subtitle">
+              Clear photos of handwritten parchment work best.
+            </p>
+            <span className="btn-primary">Select Photo</span>
+          </label>
         </div>
+      )}
 
-        {status === 'idle' && (
-          <div className="empty-state">
-            <MdAutoGraph size={40} color="#2563eb" style={{ opacity: 0.3, marginBottom: '10px' }} />
-            <p>Analysis results will appear here after upload.</p>
-          </div>
-        )}
+      {status === 'processing' && (
+        <div className="bento-card text-center" style={{ textAlign: 'center', padding: '60px' }}>
+          <div className="spinner" style={{ margin: '0 auto 20px', borderTopColor: 'var(--blue-accent)' }}></div>
+          <h2>Decoding doctor handwriting...</h2>
+          <p style={{ color: 'var(--text-muted)' }}>Our AI is extracting medication details. This may take a few seconds.</p>
+        </div>
+      )}
 
-        {status === 'processing' && (
-          <div className="empty-state">
-            <div className="spinner" style={{ marginBottom: '10px' }}></div>
-            <p>Extracting data... Please hold on.</p>
-          </div>
-        )}
-
-        {status === 'ready' && analysis && (
-          <div className="prescription-results-full">
-            <div className="medication-grid">
-              {analysis.medications.map((med, idx) => (
-                <div key={idx} className="med-box">
-                  <div className="med-header">
-                    <span className="med-title">{med.name}</span>
-                    <span className="med-tag">{med.dosage}</span>
-                  </div>
-                  <div className="med-details">
-                    <div className="detail-row"><span>Duration:</span> <strong>{med.duration}</strong></div>
-                    <div className="detail-row"><span>Intake:</span> <strong>{med.instructions}</strong></div>
-                  </div>
+      {status === 'ready' && analysis && (
+        <div className="results-panel">
+          <div className="bento-grid">
+            <div className="bento-card" style={{ gridColumn: 'span 12' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                <MdCheckCircle size={28} color="var(--green-accent)" />
+                <h2 style={{ margin: 0 }}>Doctor's Advice</h2>
+              </div>
+              <p style={{ fontSize: '18px' }}>{analysis.advice}</p>
+              {analysis.followUp && (
+                <div style={{ marginTop: '16px', display: 'inline-block', background: '#eff6ff', color: 'var(--blue-accent)', padding: '8px 16px', borderRadius: '8px', fontWeight: 'bold' }}>
+                  Next Visit: {analysis.followUp}
                 </div>
-              ))}
+              )}
             </div>
 
-            <div className="ai-instructions-container">
-              <div className="instruction-header">
-                <MdCheckCircle color="#10b981" size={20} />
-                <h3>Doctor's Advice Summary</h3>
-              </div>
-              <div className="instruction-body">
-                <p>{analysis.advice}</p>
-                <div className="follow-up-tag">
-                  <strong>Next Visit:</strong> {analysis.followUp}
-                </div>
+            <div className="bento-card" style={{ gridColumn: 'span 12' }}>
+              <h2 style={{ marginTop: 0, marginBottom: '24px' }}>Medications Prescribed</h2>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '16px' }}>
+                {analysis.medications.map((med, idx) => (
+                  <div key={idx} style={{ border: '1px solid var(--border-color)', borderRadius: '12px', padding: '16px', background: '#f8fafc' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                      <h3 style={{ margin: 0, color: 'var(--blue-accent)' }}>{med.name}</h3>
+                      <span style={{ background: '#dbeafe', color: 'var(--blue-accent)', padding: '4px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 'bold' }}>{med.dosage}</span>
+                    </div>
+                    <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
+                      <div style={{ marginBottom: '4px' }}><strong>Duration:</strong> {med.duration}</div>
+                      <div><strong>Instructions:</strong> {med.instructions}</div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   )
 }

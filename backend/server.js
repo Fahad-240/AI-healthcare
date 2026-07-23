@@ -3,12 +3,13 @@ const cors = require('cors');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const streamifier = require('streamifier');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
+const { exec } = require('child_process');
 require('dotenv').config();
 
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+// Removed bcrypt and jwt for Guest Mode
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -28,8 +29,8 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
-// Setup Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Setup DeepSeek AI
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
 // Setup MongoDB Connection
 const connectDB = async () => {
@@ -62,108 +63,78 @@ const checkDB = (req, res, next) => {
   next();
 };
 
-// Define Mongoose Schema for Users
-const UserSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const User = mongoose.model('User', UserSchema);
-
 // Define Mongoose Schema for Saving Analyses
 const HistorySchema = new mongoose.Schema({
   type: { type: String, required: true }, // 'prescription' or 'lab_report'
   fileUrl: String, // Cloudinary URL
   analysisData: Object, // The AI json response
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Reference to user
+  deviceId: { type: String, required: true }, // Reference to the anonymous device
   createdAt: { type: Date, default: Date.now }
 });
 
 const History = mongoose.model('History', HistorySchema);
 
+// --- OCR Helper Functions ---
+const performWindowsOCR = (buffer) => {
+  return new Promise((resolve, reject) => {
+    const tempFileName = `temp_${Date.now()}.png`;
+    const tempFilePath = path.join(__dirname, tempFileName);
+    
+    fs.writeFileSync(tempFilePath, buffer);
+    
+    const psScript = `
+[void][Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
+[void][Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]
+$file = Get-Item "${tempFilePath.replace(/\\/g, '\\\\')}"
+$stream = [Windows.Storage.Streams.FileRandomAccessStream]::OpenAsync($file.FullName, [Windows.Storage.FileAccessMode]::Read).GetResults()
+$decoder = [Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream).GetResults()
+$softwareBitmap = $decoder.GetSoftwareBitmapAsync().GetResults()
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
+if ($engine) {
+  $ocrResult = $engine.RecognizeAsync($softwareBitmap).GetResults()
+  Write-Output $ocrResult.Text
+} else {
+  Write-Error "OCR Engine could not be created"
+}
+    `;
+    
+    const tempPs1Path = path.join(__dirname, `temp_ocr_${Date.now()}.ps1`);
+    fs.writeFileSync(tempPs1Path, psScript);
+    
+    exec(`powershell -ExecutionPolicy Bypass -File "${tempPs1Path}"`, (err, stdout, stderr) => {
+      // Cleanup temp files
+      try { fs.unlinkSync(tempFilePath); } catch (e) {}
+      try { fs.unlinkSync(tempPs1Path); } catch (e) {}
+      
+      if (err) {
+        console.error('PowerShell OCR Error:', stderr);
+        return reject(err);
+      }
+      resolve(stdout.trim());
+    });
+  });
+};
+
+const extractTextFromPdf = (buffer) => {
+  try {
+    const text = buffer.toString('binary');
+    const streamMatches = text.match(/stream[\s\S]*?endstream/g) || [];
+    let extracted = "";
+    for (const stream of streamMatches) {
+      const parenMatches = stream.match(/\(([^)]+)\)/g);
+      if (parenMatches) {
+        extracted += parenMatches.map(m => m.slice(1, -1)).join(" ") + "\n";
+      }
+    }
+    const cleaned = extracted.replace(/\\([0-7]{3})/g, (m, oct) => String.fromCharCode(parseInt(oct, 8)));
+    return cleaned.trim() || "Could not extract plain text stream from PDF. Please upload a clear image instead.";
+  } catch (e) {
+    return "Error parsing PDF structure.";
+  }
+};
+
 // --- Authentication Routes ---
-
-// Register Endpoint
-app.post('/api/auth/register', checkDB, async (req, res) => {
-  try {
-    const { firstName, lastName, email, password } = req.body;
-
-    if (!firstName || !lastName || !email || !password) {
-      return res.status(400).json({ status: 'error', message: 'All fields are required' });
-    }
-
-    // Check if user exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      return res.status(400).json({ status: 'error', message: 'User already exists' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const newUser = new User({
-      name: `${firstName} ${lastName}`,
-      email,
-      password: hashedPassword
-    });
-
-    await newUser.save();
-
-    res.status(201).json({
-      status: 'success',
-      message: 'User registered successfully',
-      user: { name: newUser.name, email: newUser.email }
-    });
-
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ status: 'error', message: 'Error during registration' });
-  }
-});
-
-// Login Endpoint
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ status: 'error', message: 'Email and password are required' });
-    }
-
-    // Find user
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ status: 'error', message: 'Invalid email or password' });
-    }
-
-    // Check password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ status: 'error', message: 'Invalid email or password' });
-    }
-
-    // Create Token (Optional but good practice)
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET || 'secret_key', { expiresIn: '1d' });
-
-    res.json({
-      status: 'success',
-      message: 'Login successful',
-      token,
-      user: { name: user.name, email: user.email }
-    });
-
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({
-      status: 'error',
-      message: 'Error during login. ' + (error.name === 'MongooseError' ? 'Database issue.' : 'Internal server error.')
-    });
-  }
-});
-
+// Removed Registration and Login for Guest Mode
 // Helper function to upload buffer to Cloudinary
 const uploadToCloudinary = (buffer) => {
   return new Promise((resolve, reject) => {
@@ -208,29 +179,31 @@ app.post('/api/analyze-document', upload.single('file'), async (req, res) => {
     } catch (cloudinaryErr) {
       console.error('Cloudinary upload failed (skipping for this demo if credentials are bad):', cloudinaryErr);
     }
-
-    // 2. Call Gemini API
-    console.log("Analyzing document with Gemini AI...");
-
-    // Prepare the document part for Gemini
-    const documentPart = {
-      inlineData: {
-        data: file.buffer.toString("base64"),
-        mimeType: file.mimetype
-      }
-    };
-
+    
+    // 2. Prepare Prompts & Payload
     let prompt = "";
     if (type === 'prescription') {
       prompt = `Extract medical information from this prescription image. 
+      IMPORTANT INSTRUCTIONS RULE: Convert ALL medical abbreviations into simple everyday language a non-doctor can understand.
+      Examples of how to convert:
+      - "BID" or "BD" = "1 tablet in morning, 1 tablet at night"
+      - "TID" or "TDS" = "1 tablet in morning, 1 tablet at noon, 1 tablet at night"
+      - "QID" = "1 tablet 4 times a day (morning, noon, evening, night)"
+      - "OD" or "QD" = "1 tablet once daily"
+      - "HS" = "1 tablet at bedtime (before sleep)"
+      - "AC" = "take before meals"
+      - "PC" = "take after meals"
+      - If something says "2 tabs BID" write "2 tablets in morning, 2 tablets at night"
+      Always write instructions in simple plain English that anyone can understand.
+      
       Return ONLY a JSON object with this exact structure, no markdown formatting around it:
       {
         "status": "success",
         "data": {
           "medications": [
-            { "name": "medicine name", "dosage": "e.g. 500mg", "duration": "e.g. 5 Days", "instructions": "how to take" }
+            { "name": "medicine name", "dosage": "e.g. 500mg", "duration": "e.g. 5 Days", "instructions": "simple plain English instructions like: 1 tablet in morning, 1 tablet at night" }
           ],
-          "advice": "General doctor advice from prescription",
+          "advice": "General doctor advice from prescription in simple language",
           "followUp": "When to follow up"
         }
       }`;
@@ -250,36 +223,80 @@ app.post('/api/analyze-document', upload.single('file'), async (req, res) => {
       }`;
     }
 
-    // Call Gemini
-    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    const aiResponse = await model.generateContent([prompt, documentPart]);
-    const response = await aiResponse.response;
-    let rawJsonText = response.text();
+    // 3. Call Groq Vision API
+    console.log("Analyzing document with Groq Vision AI...");
+    const isPdf = file.mimetype === 'application/pdf';
+    let content = [];
+
+    if (isPdf) {
+      console.log('Extracting text from PDF (fallback for Groq)...');
+      const extractedText = extractTextFromPdf(file.buffer);
+      content = [
+        { type: 'text', text: `${prompt}\n\nHere is the raw text extracted from the PDF:\n${extractedText}` }
+      ];
+    } else {
+      const base64Data = file.buffer.toString('base64');
+      const mimeType = file.mimetype || 'image/jpeg';
+      content = [
+        { type: 'text', text: prompt },
+        {
+          type: 'image_url',
+          image_url: {
+            url: `data:${mimeType};base64,${base64Data}`
+          }
+        }
+      ];
+    }
+
+    const groqPayload = {
+      model: 'qwen/qwen3.6-27b',
+      messages: [
+        {
+          role: 'user',
+          content: content
+        }
+      ],
+      temperature: 0.1,
+      response_format: { type: 'json_object' }
+    };
+
+    const groqResponse = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`
+      },
+      body: JSON.stringify(groqPayload)
+    });
+
+    if (!groqResponse.ok) {
+      const errText = await groqResponse.text();
+      throw new Error(`Groq API Error ${groqResponse.status}: ${errText}`);
+    }
+
+    const groqResult = await groqResponse.json();
+    let rawJsonText = groqResult.choices?.[0]?.message?.content || '{}';
+    console.log('Groq AI analysis successful!');
 
     // Clean potential markdown blocks from AI response
-    if (rawJsonText.startsWith("```json")) {
+    if (rawJsonText.startsWith('```json')) {
       rawJsonText = rawJsonText.replace(/```json/g, '').replace(/```/g, '').trim();
-    } else if (rawJsonText.startsWith("```")) {
+    } else if (rawJsonText.startsWith('```')) {
       rawJsonText = rawJsonText.replace(/```/g, '').trim();
     }
 
     const aiData = JSON.parse(rawJsonText);
 
     // 3. Save to MongoDB History (If connected)
-    if (mongoose.connection.readyState === 1 && fileUrl) {
+    if (mongoose.connection.readyState === 1) {
       try {
-        let userId = null;
-        const { email } = req.body;
-        if (email) {
-          const user = await User.findOne({ email });
-          if (user) userId = user._id;
-        }
+        const { deviceId } = req.body;
 
         const historyRecord = new History({
           type: type,
-          fileUrl: fileUrl,
+          fileUrl: fileUrl || '', // Save empty string if Cloudinary failed
           analysisData: aiData.data,
-          userId: userId
+          deviceId: deviceId || 'anonymous'
         });
         await historyRecord.save();
         console.log('Saved to history collection');
@@ -300,17 +317,11 @@ app.post('/api/analyze-document', upload.single('file'), async (req, res) => {
 app.get('/api/history', checkDB, async (req, res) => {
   try {
 
-    const { email } = req.query;
+    const { deviceId } = req.query;
     let query = {};
 
-    if (email) {
-      const user = await User.findOne({ email });
-      if (user) {
-        query = { userId: user._id };
-      } else {
-        // If email provided but user not found, return empty or handle error
-        return res.json({ status: 'success', data: [] });
-      }
+    if (deviceId) {
+      query = { deviceId };
     }
 
     const records = await History.find(query).sort({ createdAt: -1 }).limit(20);

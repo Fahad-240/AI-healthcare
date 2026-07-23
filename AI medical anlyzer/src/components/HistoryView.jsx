@@ -1,13 +1,10 @@
 import { useState, useEffect } from 'react'
 import {
-  MdMoreHoriz,
   MdOutlineDescription,
   MdLocalHospital,
-  MdFavorite,
-  MdBloodtype,
-  MdWarningAmber,
+  MdArrowForwardIos,
 } from 'react-icons/md'
-import { FaFlask, FaPills, FaNotesMedical } from 'react-icons/fa'
+import { FaFlask, FaNotesMedical } from 'react-icons/fa'
 import { BASE_URL } from '../config'
 
 function HistoryView() {
@@ -17,11 +14,10 @@ function HistoryView() {
   useEffect(() => {
     const fetchHistory = async () => {
       try {
-        const userStr = localStorage.getItem('user');
+        const deviceId = localStorage.getItem('deviceId');
         let url = `${BASE_URL}/api/history`;
-        if (userStr) {
-          const user = JSON.parse(userStr);
-          if (user.email) url += `?email=${encodeURIComponent(user.email)}`;
+        if (deviceId) {
+          url += `?deviceId=${encodeURIComponent(deviceId)}`;
         }
 
         const response = await fetch(url);
@@ -43,8 +39,8 @@ function HistoryView() {
 
   if (loading) {
     return (
-      <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-        <div className="spinner" style={{ margin: '0 auto 15px' }}></div>
+      <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+        <div className="spinner" style={{ margin: '0 auto 15px', borderTopColor: 'var(--blue-accent)' }}></div>
         <p>Loading your medical history...</p>
       </div>
     );
@@ -52,110 +48,78 @@ function HistoryView() {
 
   return (
     <div>
-      {/* Stats */}
-      <div className="stats-row" style={{ marginBottom: '20px' }}>
-        <div className="stat-card">
-          <div className="stat-icon stat-icon-blue">
-            <FaNotesMedical size={22} color="#2563eb" />
-          </div>
-          <div>
-            <div className="stat-label">Total Prescriptions</div>
-            <div className="stat-value">{prescriptions.length}</div>
-            <div className="stat-sub">Analyzed by AI</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon stat-icon-green">
-            <FaFlask size={20} color="#16a34a" />
-          </div>
-          <div>
-            <div className="stat-label">Lab Reports</div>
-            <div className="stat-value">{reports.length}</div>
-            <div className="stat-sub">Analyzed by AI</div>
-          </div>
-        </div>
+      <div className="view-header" style={{ textAlign: 'center' }}>
+        <h1>Document History</h1>
+        <p>View all your previously analyzed lab reports and prescriptions.</p>
       </div>
 
-      <div className="content-grid">
-        {/* Left: Prescription History */}
-        <section className="panel">
-          <div className="panel-header-row">
-            <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#1e293b' }}>
-              Recent Prescriptions
-            </h2>
-            <button className="panel-menu-btn"><MdMoreHoriz size={20} /></button>
+      <div className="bento-grid">
+        {/* Stats */}
+        <div className="bento-card" style={{ gridColumn: 'span 6', display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue-accent)' }}>
+            <FaNotesMedical size={32} />
           </div>
-          <ul className="history-list" style={{ marginTop: '12px' }}>
-            {prescriptions.map((item) => (
-              <li key={item._id} className="history-item">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div className="history-item-icon"><MdLocalHospital size={20} color="#2563eb" /></div>
-                  <div>
-                    <div className="history-title">Prescription Analysis</div>
-                    <div className="history-meta">{new Date(item.createdAt).toLocaleDateString()} · AI Analyzed</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button type="button" className="btn-outline btn-compact" onClick={() => window.open(item.fileUrl, '_blank')}>
-                    View File
-                  </button>
-                </div>
-              </li>
-            ))}
-            {prescriptions.length === 0 && <p style={{ color: '#64748b', fontSize: '14px', padding: '10px 0' }}>No prescription history found.</p>}
-          </ul>
-        </section>
-
-        {/* Right: Lab Report History */}
-        <section className="panel">
-          <div className="panel-header-row">
-            <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#1e293b' }}>
-              Recent Lab Reports
-            </h2>
-            <button className="panel-menu-btn"><MdMoreHoriz size={20} /></button>
+          <div>
+            <div style={{ fontSize: '32px', fontWeight: '800' }}>{prescriptions.length}</div>
+            <div style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Prescriptions Analyzed</div>
           </div>
-          <ul className="history-list" style={{ marginTop: '12px' }}>
-            {reports.map((item) => (
-              <li key={item._id} className="history-item">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div className="history-item-icon"><FaFlask size={18} color="#2563eb" /></div>
-                  <div>
-                    <div className="history-title">Lab Report Analysis</div>
-                    <div className="history-meta">{new Date(item.createdAt).toLocaleDateString()} · AI Analyzed</div>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <button type="button" className="btn-outline btn-compact" onClick={() => window.open(item.fileUrl, '_blank')}>
-                    View File
-                  </button>
-                </div>
-              </li>
-            ))}
-            {reports.length === 0 && <p style={{ color: '#64748b', fontSize: '14px', padding: '10px 0' }}>No lab report history found.</p>}
-          </ul>
-        </section>
-      </div>
-
-      {/* Timeline */}
-      <section className="panel" style={{ marginTop: '20px' }}>
-        <div className="panel-header-row">
-          <h2 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#1e293b' }}>
-            Activity Timeline
-          </h2>
         </div>
-        <ul className="timeline" style={{ marginTop: '16px' }}>
-          {historyData.slice(0, 5).map(item => (
-            <li key={item._id} className="timeline-item">
-              <div className="timeline-dot"></div>
-              <div className="timeline-content">
-                <div className="timeline-title">{item.type === 'prescription' ? 'Prescription Uploaded & Analyzed' : 'Lab Report Uploaded & Analyzed'}</div>
-                <p className="timeline-text">{new Date(item.createdAt).toLocaleString()} · Data extracted successfully</p>
-              </div>
-            </li>
-          ))}
-          {historyData.length === 0 && <p style={{ color: '#64748b', fontSize: '14px' }}>No timeline activity.</p>}
-        </ul>
-      </section>
+
+        <div className="bento-card" style={{ gridColumn: 'span 6', display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#dcfce7', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green-accent)' }}>
+            <FaFlask size={32} />
+          </div>
+          <div>
+            <div style={{ fontSize: '32px', fontWeight: '800' }}>{reports.length}</div>
+            <div style={{ color: 'var(--text-muted)', fontWeight: '600' }}>Lab Reports Analyzed</div>
+          </div>
+        </div>
+
+        {/* History Lists */}
+        <div className="bento-card" style={{ gridColumn: 'span 6' }}>
+          <h2 style={{ marginTop: 0, marginBottom: '24px' }}>Prescriptions</h2>
+          {prescriptions.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No prescriptions analyzed yet.</p>
+          ) : (
+            <div>
+              {prescriptions.map((item) => (
+                <div className="history-item-mini" key={item._id}>
+                  <div className="item-icon" style={{ background: '#eff6ff', color: 'var(--blue-accent)' }}>
+                    <MdLocalHospital size={24} />
+                  </div>
+                  <div className="item-info">
+                    <div className="item-title">Prescription Analysis</div>
+                    <div className="item-date">{new Date(item.createdAt).toLocaleDateString()}</div>
+                  </div>
+                  <button className="btn-outline btn-compact" onClick={() => window.open(item.fileUrl, '_blank')}>View</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bento-card" style={{ gridColumn: 'span 6' }}>
+          <h2 style={{ marginTop: 0, marginBottom: '24px' }}>Lab Reports</h2>
+          {reports.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)' }}>No lab reports analyzed yet.</p>
+          ) : (
+            <div>
+              {reports.map((item) => (
+                <div className="history-item-mini" key={item._id}>
+                  <div className="item-icon" style={{ background: '#dcfce7', color: 'var(--green-accent)' }}>
+                    <FaFlask size={24} />
+                  </div>
+                  <div className="item-info">
+                    <div className="item-title">Lab Report Analysis</div>
+                    <div className="item-date">{new Date(item.createdAt).toLocaleDateString()}</div>
+                  </div>
+                  <button className="btn-outline btn-compact" onClick={() => window.open(item.fileUrl, '_blank')}>View</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

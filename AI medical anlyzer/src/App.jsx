@@ -2,30 +2,24 @@ import { useState, useEffect } from 'react'
 import './App.css'
 import { VIEWS } from './constants/views'
 import { BASE_URL } from './config'
-import Sidebar from './components/Sidebar'
-import HeaderBar from './components/HeaderBar'
+import TopNav from './components/TopNav'
 import DashboardView from './components/DashboardView'
 import LabReportsView from './components/LabReportsView'
 import HistoryView from './components/HistoryView'
-import LoginSignupView from './components/LoginSignupView'
 import PrescriptionsView from './components/PrescriptionsView'
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [view, setView] = useState(VIEWS.DASHBOARD)
   const [labReportFile, setLabReportFile] = useState(null)
   const [labReportStatus, setLabReportStatus] = useState('idle') // idle | processing | ready
   const [labReportSummary, setLabReportSummary] = useState(null)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
 
-  // Prescription side state can be internal to PrescriptionsView now
-  // as per the user's request for "separate pages"
-
-  // Check if user is already logged in
+  // Initialize Guest Mode (Device ID)
   useEffect(() => {
-    const user = localStorage.getItem('user')
-    if (user) {
-      setIsAuthenticated(true)
+    let deviceId = localStorage.getItem('deviceId')
+    if (!deviceId) {
+      deviceId = (window.crypto && window.crypto.randomUUID) ? window.crypto.randomUUID() : 'guest_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+      localStorage.setItem('deviceId', deviceId)
     }
   }, [])
 
@@ -41,11 +35,10 @@ function App() {
     formData.append('file', file)
     formData.append('type', 'lab_report')
 
-    // Add user email if authenticated
-    const userStr = localStorage.getItem('user')
-    if (userStr) {
-      const user = JSON.parse(userStr)
-      if (user.email) formData.append('email', user.email)
+    // Add deviceId for anonymous session tracking
+    const deviceId = localStorage.getItem('deviceId')
+    if (deviceId) {
+      formData.append('deviceId', deviceId)
     }
 
     try {
@@ -70,51 +63,12 @@ function App() {
     }
   }
 
-  const handleLogout = () => {
-    localStorage.removeItem('user')
-    setIsAuthenticated(false)
-    setView(VIEWS.DASHBOARD)
-  }
-
-  // If not authenticated, show login/signup page
-  if (!isAuthenticated) {
-    return <LoginSignupView onLogin={() => setIsAuthenticated(true)} />
-  }
-
   return (
-    <div className={`app-shell ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-      <Sidebar 
-        currentView={view} 
-        onChangeView={(v) => {
-          setView(v)
-          setIsSidebarOpen(false)
-        }} 
-        onLogout={handleLogout}
-        isOpen={isSidebarOpen}
-        onClose={() => setIsSidebarOpen(false)}
-      />
+    <div className="modern-app">
+      <TopNav currentView={view} onChangeView={setView} />
 
-      <div className="main">
-        <HeaderBar
-          currentView={view}
-          onOpenSidebar={() => setIsSidebarOpen(true)}
-          onGoDashboard={() => {
-            setView(VIEWS.DASHBOARD)
-            window.scrollTo({ top: 0, behavior: 'smooth' })
-          }}
-          onNewUpload={() => {
-            if (view === VIEWS.LAB_REPORTS) {
-              setView(VIEWS.LAB_REPORTS)
-            } else if (view === VIEWS.PRESCRIPTIONS) {
-              setView(VIEWS.PRESCRIPTIONS)
-            } else {
-              setView(VIEWS.DASHBOARD)
-            }
-          }}
-          onLogout={handleLogout}
-        />
-
-        <main>
+      <main className="main-content">
+        <div className="content-container">
           {view === VIEWS.DASHBOARD && <DashboardView />}
 
           {view === VIEWS.LAB_REPORTS && (
@@ -129,8 +83,8 @@ function App() {
           {view === VIEWS.PRESCRIPTIONS && <PrescriptionsView />}
 
           {view === VIEWS.HISTORY && <HistoryView />}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   )
 }
